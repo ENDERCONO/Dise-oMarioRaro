@@ -1,0 +1,32 @@
+<!-- Config file for the engine -->
+<config>
+  <engine>
+    <title value="Platformer Game"/>
+    <targetFrameRate value="60"/>
+  </engine>
+
+  <render>
+    <vsync value="false"/>
+  </render>
+
+  <window>
+    <resolution width="1280" height="720" scale="1"/>
+    <fullscreen value="false"/>
+    <borderless value="false"/>
+    <resizable value="false"/>
+    <fullscreen_window value="false"/>
+  </window>
+
+	<!-- tener en cuenta-->
+  <!-- L10: TODO 4: Add paremeters to the <player> section: texture path, animations tsx path, movement speed, frame width/height -->
+  <entitymanager>
+    <player>
+	  <texture path="Assets/Textures/player2_spritesheet.png"/>
+	  <animations tsx="Assets/Textures/Spritesheet.tsx"/>
+	  <movement speed="4.0"/>
+	  <frame width="32" height="32"/>
+	  <audiofx path="Assets/Audio/Fx/coin-collision-sound-342335.wav"/>
+    </player>		
+  </entitymanager>
+
+</config>
