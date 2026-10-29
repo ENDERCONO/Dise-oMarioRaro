@@ -14,7 +14,8 @@ Map::Map() : Module(), mapLoaded(false)
 
 // Destructor
 Map::~Map()
-{}
+{
+}
 
 // Called before render is available
 bool Map::Awake()
@@ -52,6 +53,7 @@ bool Map::PostUpdate()
 						// L09: TODO 3: Obtain the tile set using GetTilesetFromTileId
 						if (gid != 0) {
 							const TileSet* tileSet = GetTilesetFromTileId(gid);
+							if (tileSet == nullptr) continue;
 
 							SDL_Rect tileRect = tileSet->GetRect(gid);
 							Vector2D mapCoord = MapToWorld(i, j);
@@ -135,6 +137,12 @@ bool Map::Load(std::string path, std::string fileName)
 				ret = false;
 			}
 
+			// The collider tile is the first tile of the "MapMetadata" tileset, wherever its firstgid ends up
+			if (tileSet.name == "MapMetadata") {
+				colliderGid = tileSet.firstGid;       // tile 0 (red)   = solid platform
+				damageGid = tileSet.firstGid + 1;     // tile 1 (green) = damage / death
+			}
+
 			mapData.tilesets.push_back(tileSet);
 		}
 
@@ -175,17 +183,44 @@ bool Map::Load(std::string path, std::string fileName)
 						if (gid != 0 && gid == colliderGid) {
 							Vector2D mapCoord = MapToWorld(i, j);
 							PhysBody* body = Engine::GetInstance().physics->CreateRectangle((int)mapCoord.getX() + mapData.tileWidth / 2,
-																							(int)mapCoord.getY() + mapData.tileHeight / 2,
-																							mapData.tileWidth, 
-																							mapData.tileHeight, 
-																							bodyType::STATIC);
+								(int)mapCoord.getY() + mapData.tileHeight / 2,
+								mapData.tileWidth,
+								mapData.tileHeight,
+								bodyType::STATIC);
 							body->ctype = ColliderType::PLATFORM;
+							Engine::GetInstance().physics->SetDebugColor(body, 0x33FF66); // green
+						}
+						else if (gid != 0 && gid == damageGid) {
+							// Sensor: the player overlaps it (no solid collision) and OnCollision fires
+							Vector2D mapCoord = MapToWorld(i, j);
+							PhysBody* body = Engine::GetInstance().physics->CreateRectangleSensor(
+								(int)mapCoord.getX() + mapData.tileWidth / 2,
+								(int)mapCoord.getY() + mapData.tileHeight / 2,
+								mapData.tileWidth,
+								mapData.tileHeight,
+								bodyType::STATIC);
+							body->ctype = ColliderType::DAMAGE;
+							Engine::GetInstance().physics->SetDebugColor(body, 0xFF3333); // red
 						}
 					}
 				}
 			}
 		}
-		
+
+
+		// Spawn point: first <object> of the object layer named "Spawn"
+		hasSpawn = false;
+		for (pugi::xml_node group = mapNode.child("objectgroup"); group; group = group.next_sibling("objectgroup"))
+		{
+			if (std::string(group.attribute("name").as_string()) != "Spawn") continue;
+			pugi::xml_node obj = group.child("object");
+			if (obj) {
+				spawnPoint = Vector2D(obj.attribute("x").as_float(), obj.attribute("y").as_float());
+				hasSpawn = true;
+				LOG("Spawn point: %.0f, %.0f", spawnPoint.getX(), spawnPoint.getY());
+			}
+		}
+		if (!hasSpawn) LOG("Map has no 'Spawn' object layer, player keeps its default position");
 
 
 		// L06: TODO 5: LOG all the data loaded, iterating all tilesets
@@ -237,7 +272,7 @@ const TileSet* Map::GetTilesetFromTileId(int gid) const
 	for (const auto& tileset : mapData.tilesets)
 	{
 		if (gid >= tileset.firstGid && gid < tileset.firstGid + tileset.tileCount)
-			return &tileset;  
+			return &tileset;
 	}
 
 	LOG("Map: gid %d does not belong to any tileset", gid);
@@ -267,3 +302,39 @@ Vector2D Map::GetMapSizeInPixels() {
 	return mapSize;
 }
 
+bool Map::FindGroundBelow(float x, float y, float maxDist, float& groundY) const
+{
+	if (!mapLoaded) return false;
+
+	int col = (int)(x / mapData.tileWidth);
+	if (col < 0 || col >= mapData.width) return false;
+
+	int firstRow = (int)(y / mapData.tileHeight);
+	if (firstRow < 0) firstRow = 0;
+	int lastRow = (int)((y + maxDist) / mapData.tileHeight);
+	if (lastRow > mapData.height - 1) lastRow = mapData.height - 1;
+
+	bool found = false;
+	float best = 0.0f;
+
+	for (const auto& layer : mapData.layers)
+	{
+		const Properties::Property* collision = layer.properties.GetProperty("Collision");
+		if (collision == nullptr || collision->value != true) continue;
+
+		for (int row = firstRow; row <= lastRow; ++row)
+		{
+			if ((int)layer.Get(col, row) != colliderGid) continue;
+
+			float top = (float)(row * mapData.tileHeight);
+			if (top < y - 2.0f) continue;          // a tile we are already past
+			if (top - y > maxDist) break;
+
+			if (!found || top < best) { best = top; found = true; }
+			break;                                  // first one in this layer is the nearest
+		}
+	}
+
+	if (found) groundY = best;
+	return found;
+}	

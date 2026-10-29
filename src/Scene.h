@@ -35,4 +35,7 @@ public:
 private:
 	// L04: TODO 3a: Declare a player as a member of Scene.h
 	std::shared_ptr<Player> player;
+
+	void DrawDebugOverlay();
+	bool showHelp = false;   // H toggles the key list
 };

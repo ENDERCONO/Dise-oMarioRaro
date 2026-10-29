@@ -108,6 +108,7 @@ bool Engine::Awake() {
         targetFrameRate = rateAttr.as_float();
     }
 
+    configFrameRate = targetFrameRate;
     //Iterates the module list and calls Awake on each module
     bool result = true;
     for (const auto& module : moduleList) {
@@ -210,6 +211,12 @@ void Engine::FinishUpdate()
     // Compute how long this frame's work took (frameTime, in ms) and, if it
     // finished early, SDL_Delay() the difference.
 
+    if (input->GetKey(SDL_SCANCODE_F11) == KEY_DOWN) {
+        cap30 = !cap30;
+        targetFrameRate = cap30 ? 30.0f : configFrameRate;
+        LOG("Frame cap: %.0f fps", targetFrameRate);
+    }
+
     float maxFrameDuration = 1000.0f / targetFrameRate;
 	float currenDt = (float) frameTime.ReadMs();
     if (currenDt < maxFrameDuration) {
@@ -256,11 +263,12 @@ void Engine::FinishUpdate()
         titleUpdateTime.Start();
 
         std::stringstream ss;
-        ss << gameTitle << ": Av.FPS: " << std::fixed << std::setprecision(2) << averageFps
-            << " Last sec frames: " << framesPerSecond
-            << " Last dt: " << std::fixed << std::setprecision(3) << dt * 1000.0 << " ms"
-            << " Time since startup: " << secondsSinceStartup
-            << " Frame Count: " << frameCount;
+        ss << gameTitle
+            << " | FPS: " << framesPerSecond
+            << " | Avg FPS: " << std::fixed << std::setprecision(2) << averageFps
+            << " | Last frame: " << std::setprecision(2) << dt * 1000.0 << " ms"
+            << " | Vsync: " << (render->IsVsync() ? "on" : "off")
+            << " | Cap: " << (int)targetFrameRate << " fps";
 
         window->SetTitle(ss.str().c_str());
     }

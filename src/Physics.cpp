@@ -12,7 +12,16 @@
 namespace {
 	constexpr float FIXED_TIMESTEP = 1.0f / 60.0f;
 	constexpr int   MAX_STEPS = 5;
+	inline void ColorToRGB(b2HexColor c, Uint8& r, Uint8& g, Uint8& b)
+	{
+		const uint32_t v = (uint32_t)c;
+		r = (Uint8)((v >> 16) & 0xFF);
+		g = (Uint8)((v >> 8) & 0xFF);
+		b = (Uint8)(v & 0xFF);
+	}
 }
+
+
 
 Physics::Physics() : Module()
 {
@@ -250,7 +259,7 @@ bool Physics::PostUpdate()
 	bool ret = true;
 
 	// Activate or deactivate debug mode
-	if (Engine::GetInstance().input->GetKey(SDL_SCANCODE_F1) == KEY_DOWN)
+	if (Engine::GetInstance().input->GetKey(SDL_SCANCODE_F9) == KEY_DOWN)
 		debug = !debug;
 
 	// Debug draw via Box2D 3.x callbacks
@@ -492,24 +501,28 @@ b2BodyType Physics::ToB2Type(bodyType t)
 
 // --- Debug draw callbacks (map to your Render)
 
-void Physics::DrawSegmentCb(b2Vec2 p1, b2Vec2 p2, b2HexColor /*color*/, void* /*ctx*/)
+void Physics::DrawSegmentCb(b2Vec2 p1, b2Vec2 p2, b2HexColor color, void* /*ctx*/)
 {
 	auto& r = *Engine::GetInstance().render;
+	Uint8 cr, cg, cb;
+	ColorToRGB(color, cr, cg, cb);
 	r.DrawLine(METERS_TO_PIXELS(p1.x), METERS_TO_PIXELS(p1.y),
 		METERS_TO_PIXELS(p2.x), METERS_TO_PIXELS(p2.y),
 		255, 255, 255);
 }
 
-void Physics::DrawPolygonCb(const b2Vec2* v, int n, b2HexColor /*color*/, void* /*ctx*/)
+void Physics::DrawPolygonCb(const b2Vec2* v, int n, b2HexColor color, void* /*ctx*/)
 {
 	auto& r = *Engine::GetInstance().render;
+	Uint8 cr, cg, cb;
+	ColorToRGB(color, cr, cg, cb);
 	for (int i = 0; i < n; ++i)
 	{
 		const b2Vec2 a = v[i];
 		const b2Vec2 b = v[(i + 1) % n];
 		r.DrawLine(METERS_TO_PIXELS(a.x), METERS_TO_PIXELS(a.y),
 			METERS_TO_PIXELS(b.x), METERS_TO_PIXELS(b.y),
-			255, 255, 100);
+			cr, cg, cb);
 	}
 }
 
@@ -522,9 +535,11 @@ void Physics::DrawSolidPolygonCb(b2Transform xf, const b2Vec2* v, int n,
 	DrawPolygonCb(world.data(), n, color, ctx);
 }
 
-void Physics::DrawCircleCb(b2Vec2 center, float radius, b2HexColor /*color*/, void* /*ctx*/)
+void Physics::DrawCircleCb(b2Vec2 center, float radius, b2HexColor color, void* /*ctx*/)
 {
 	auto& r = *Engine::GetInstance().render;
+	Uint8 cr, cg, cb;
+	ColorToRGB(color, cr, cg, cb);
 	r.DrawCircle(METERS_TO_PIXELS(center.x), METERS_TO_PIXELS(center.y),
 		(int)(METERS_TO_PIXELS(radius) * Engine::GetInstance().window->GetScale()),
 		255, 255, 255);
@@ -537,15 +552,17 @@ void Physics::DrawSolidCircleCb(b2Transform xf, float radius, b2HexColor color, 
 }
 
 void Physics::DrawSolidCapsuleCb(b2Vec2 p1, b2Vec2 p2, float radius,
-	b2HexColor /*color*/, void* /*ctx*/)
+	b2HexColor color, void* /*ctx*/)
 {
 	auto& r = *Engine::GetInstance().render;
+	Uint8 cr, cg, cb;
+	ColorToRGB(color, cr, cg, cb);
 	const float scale = Engine::GetInstance().window->GetScale();
 	const int rad = (int)(METERS_TO_PIXELS(radius) * scale);
 
 	// the two end caps
-	r.DrawCircle(METERS_TO_PIXELS(p1.x), METERS_TO_PIXELS(p1.y), rad, 255, 255, 255);
-	r.DrawCircle(METERS_TO_PIXELS(p2.x), METERS_TO_PIXELS(p2.y), rad, 255, 255, 255);
+	r.DrawCircle(METERS_TO_PIXELS(p1.x), METERS_TO_PIXELS(p1.y), rad, cr, cg, cb);
+	r.DrawCircle(METERS_TO_PIXELS(p2.x), METERS_TO_PIXELS(p2.y), rad, cr, cg, cb);
 
 	// the straight sides: offset the segment by the radius, perpendicular to it
 	b2Vec2 d = { p2.x - p1.x, p2.y - p1.y };
@@ -559,6 +576,20 @@ void Physics::DrawSolidCapsuleCb(b2Vec2 p1, b2Vec2 p2, float radius,
 			METERS_TO_PIXELS(p2.x + nx), METERS_TO_PIXELS(p2.y + ny), 255, 255, 255);
 		r.DrawLine(METERS_TO_PIXELS(p1.x - nx), METERS_TO_PIXELS(p1.y - ny),
 			METERS_TO_PIXELS(p2.x - nx), METERS_TO_PIXELS(p2.y - ny), 255, 255, 255);
+	}
+}
+
+void Physics::SetDebugColor(PhysBody* p, uint32_t rgb)
+{
+	if (p == nullptr || B2_IS_NULL(p->body)) return;
+	const int count = b2Body_GetShapeCount(p->body);
+	std::vector<b2ShapeId> shapes(count);
+	b2Body_GetShapes(p->body, shapes.data(), count);
+	for (const b2ShapeId& s : shapes)
+	{
+		b2SurfaceMaterial m = b2Shape_GetSurfaceMaterial(s);
+		m.customColor = rgb;
+		b2Shape_SetSurfaceMaterial(s, m);
 	}
 }
 

@@ -125,7 +125,7 @@ void Render::ResetViewPort()
 }
 
 // Blit to screen
-bool Render::DrawTexture(SDL_Texture* texture, int x, int y, const SDL_Rect* section, float speed, double angle, int pivotX, int pivotY) const
+bool Render::DrawTexture(SDL_Texture* texture, int x, int y, const SDL_Rect* section, float speed, double angle, int pivotX, int pivotY, SDL_FlipMode flip) const
 {
 	bool ret = true;
 	float scale = Engine::GetInstance().window->GetScale();
@@ -173,7 +173,7 @@ bool Render::DrawTexture(SDL_Texture* texture, int x, int y, const SDL_Rect* sec
 	}
 
 	// SDL3: returns bool; map to int-style check
-	int rc = SDL_RenderTextureRotated(renderer, texture, src, &rect, angle, p, SDL_FLIP_NONE) ? 0 : -1;
+	int rc = SDL_RenderTextureRotated(renderer, texture, src, &rect, angle, p, flip) ? 0 : -1;
 	if (rc != 0)
 	{
 		LOG("Cannot blit to screen. SDL_RenderTextureRotated error: %s", SDL_GetError());
@@ -254,6 +254,18 @@ bool Render::DrawLine(int x1, int y1, int x2, int y2, Uint8 r, Uint8 g, Uint8 b,
 	return ret;
 }
 
+// Filled ellipse made of horizontal scanlines (used for the player's shadow)
+bool Render::DrawFilledEllipse(int cx, int cy, int rx, int ry, Uint8 r, Uint8 g, Uint8 b, Uint8 a, bool useCamera) const
+{
+	for (int dy = -ry; dy <= ry; ++dy)
+	{
+		float t = (ry == 0) ? 0.0f : (float)dy / (float)ry;
+		int halfW = (int)std::lround(rx * std::sqrt(1.0f - t * t));
+		DrawLine(cx - halfW, cy + dy, cx + halfW, cy + dy, r, g, b, a, useCamera);
+	}
+	return true;
+}
+
 bool Render::DrawCircle(int x, int y, int radius, Uint8 r, Uint8 g, Uint8 b, Uint8 a, bool use_camera) const
 {
 	bool ret = true;
@@ -285,4 +297,13 @@ bool Render::DrawCircle(int x, int y, int radius, Uint8 r, Uint8 g, Uint8 b, Uin
 	}
 
 	return ret;
+}
+
+bool Render::DrawDebugText(const char* text, int x, int y, Uint8 r, Uint8 g, Uint8 b, float textScale) const
+{
+	SDL_SetRenderScale(renderer, textScale, textScale);
+	SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+	bool ok = SDL_RenderDebugText(renderer, x / textScale, y / textScale, text);
+	SDL_SetRenderScale(renderer, 1.0f, 1.0f);
+	return ok;
 }

@@ -126,8 +126,14 @@ public:
 	// L10: TODO 8: Return the map's total size in pixels (width/height in
 	// tiles times tile size) -- used to clamp the camera to the map's edges
 	Vector2D GetMapSizeInPixels();
+	bool FindGroundBelow(float x, float y, float maxDist, float& groundY) const;
 
 public:
+
+	//Spawnpoint Location
+	Vector2D spawnPoint;
+	bool hasSpawn = false;
+
 	std::string mapFileName;
 	std::string mapPath;
 
@@ -138,5 +144,7 @@ private:
 	MapData mapData;
 
 	// L09: TODO 8: Create colliders from map metadata
+
+	int damageGid = 0;
 	int colliderGid = 49; // The gid of the tile that represents a collider in the tileset
 };

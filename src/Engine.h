@@ -109,6 +109,9 @@ public:
 	// L08: TODO 2: Add Physics Module
 	std::shared_ptr<Physics> physics;
 
+	bool IsCapped30() const { return cap30; }
+	float GetTargetFrameRate() const { return targetFrameRate; }
+
 private:
 	// Delta time in seconds, computed once per frame in FinishUpdate().
 	float dt = 0.0f;
@@ -131,6 +134,8 @@ private:
 
 	// Target frame rate, in frames per second.
 	float targetFrameRate = 60;
+	float configFrameRate = 60;   // the value read from config.xml
+	bool cap30 = false;
 
 	std::string gameTitle = "Platformer Game";
 

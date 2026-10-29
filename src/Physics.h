@@ -6,7 +6,7 @@
 #include <box2d/box2d.h>   // Box2D 3.x single header
 
 constexpr float GRAVITY_X = 0.0f;
-constexpr float GRAVITY_Y = -10.0f;
+constexpr float GRAVITY_Y = -8.0f;
 
 constexpr float PIXELS_PER_METER = 50.0f;
 constexpr float METER_PER_PIXEL = 1.0f / PIXELS_PER_METER; // derived, never hand-edit
@@ -29,6 +29,7 @@ enum class ColliderType {
 	ITEM,
 	PLATFORM,
 	ENEMY,
+	DAMAGE,
 	UNKNOWN
 	// ..
 };
@@ -91,6 +92,9 @@ public:
 
 	void DeletePhysBody(PhysBody* physBody);
 	bool IsPendingToDelete(PhysBody* physBody);
+
+	bool IsDebug() const { return debug; }
+	void SetDebugColor(PhysBody* p, uint32_t rgb);
 
 	// --- Velocity helpers (thin wrappers over Box2D 3.x C API)
 	b2Vec2 GetLinearVelocity(const PhysBody* p) const;
