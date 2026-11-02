@@ -44,11 +44,16 @@ bool Player::Start()
 	// L10: TODO 5: Load this entity's animations from a TSX and set the current animation to "idle".
 	// ...
 
-	anims.LoadFromTSX(parameters.child("animations").attribute("tsx").as_string(), { {0, "idle"}, {11, "move"}, {22, "jump"} });
+	
+	anims.LoadFromTSX(parameters.child("animations").attribute("tsx").as_string(),
+		{ {0, "idle"}, {11, "move"}, {22, "jump"}, {25, "die"} });
 	anims.SetCurrent("idle");
-	speed = parameters.child("movement").attribute("speed").as_float(speed);
-	// Initialize audio effect
-	pickCoinFxId = Engine::GetInstance().audio->LoadFx("Assets/Audio/Fx/coin-collision-sound-342335.wav");
+
+	//Movement / jump / dash / death tuning from config.xml
+	LoadParameters();
+
+	// Audio effect path from config.xml
+	pickCoinFxId = Engine::GetInstance().audio->LoadFx(parameters.child("audiofx").attribute("path").as_string());
 
 	// L08: TODO 5: Add physics to the player - create the physics body: a CAPSULE (CreateCapsule) with fixed rotation, so the player does not roll
 	// Capsule + fixed rotation: no rolling, and no bumping over the seams between tile rectangles
@@ -72,61 +77,86 @@ bool Player::Start()
 	return true;
 }
 
+// Update() only decides WHAT happens this frame; every action lives in its
+// own function below (Move, Jump, Dash, ApplyGravity, ...).
 bool Player::Update(float dt)
 {
-	// L08: TODO 5: Add physics to the player - updated player position using physics
-
-	Input* input = Engine::GetInstance().input.get();
-	Physics* physics = Engine::GetInstance().physics.get();
-
-	// F10: god mode (invulnerable + free flight)
-	if (input->GetKey(SDL_SCANCODE_F10) == KEY_DOWN) {
-		godMode = !godMode;
-		dashing = false;
-		physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
-		if (godMode && dead) Respawn();
-		LOG("God mode %s", godMode ? "ON" : "OFF");
-	}
+	if (Engine::GetInstance().input->GetKey(SDL_SCANCODE_F10) == KEY_DOWN)
+		ToggleGodMode();
 
 	if (godMode) {
-		auto held = [&](int sc) { KeyState k = input->GetKey(sc); return k == KEY_DOWN || k == KEY_REPEAT; };
-		float flySpeed = speed * 2.0f;
-		float vx = ((held(SDL_SCANCODE_D) ? 1.0f : 0.0f) - (held(SDL_SCANCODE_A) ? 1.0f : 0.0f)) * flySpeed;
-		float vy = ((held(SDL_SCANCODE_S) ? 1.0f : 0.0f) - (held(SDL_SCANCODE_W) ? 1.0f : 0.0f)) * flySpeed;
-		if (vx != 0.0f) facing = (vx > 0.0f) ? 1.0f : -1.0f;
+		GodModeFly();
+	}
+	else if (dead) {
+		UpdateDead(dt);
+	}
+	else {
+		Physics* physics = Engine::GetInstance().physics.get();
 
-		b2Body_SetGravityScale(pbody->body, 0.0f);
-		physics->SetLinearVelocity(pbody, vx, vy);
+		isGround = CheckGround();
+		UpdateTimers(dt);
+		ReadInput();
 
-		int gx, gy;
-		pbody->GetPosition(gx, gy);
-		position.setX((float)gx);
-		position.setY((float)gy);
-		UpdateCamera();
-		anims.SetCurrent((vx != 0.0f || vy != 0.0f) ? "move" : "idle");
-		anims.Update(dt);
-		return true;
+		velocity = physics->GetLinearVelocity(pbody);
+		Dash(dt);
+		if (!dashing) {
+			Move();
+			Jump();
+		}
+		ApplyGravity();
+		physics->SetLinearVelocity(pbody, velocity);
+
+		UpdateAnimation();
 	}
 
-	// Dead: stay frozen for a moment, then respawn at the map's spawn point
-	if (dead) {
-		deathTimer -= dt;
-		physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
-		b2Body_SetGravityScale(pbody->body, 0.0f);
-		if (deathTimer <= 0.0f) Respawn();
+	SyncPositionFromBody();
+	CheckFallOutOfMap();
+	UpdateCamera();
 
-		int dx, dy;
-		pbody->GetPosition(dx, dy);
-		position.setX((float)dx);
-		position.setY((float)dy);
-		UpdateCamera();
-		anims.Update(dt);
-		return true;
-	}
+	// L10: TODO 6: Advance the animation frame (logic, so it lives in Update)
+	anims.Update(dt);
 
-	isGround = CheckGround();
+	return true;
+}
 
-	// ---- Timers ----
+void Player::LoadParameters()
+{
+	speed = parameters.child("movement").attribute("speed").as_float(speed);
+
+	pugi::xml_node jump = parameters.child("jump");
+	jumpSpeed = jump.attribute("force").as_float(jumpSpeed);
+	riseGravityScale = jump.attribute("riseGravity").as_float(riseGravityScale);
+	cutGravityScale = jump.attribute("cutGravity").as_float(cutGravityScale);
+	fallGravityScale = jump.attribute("fallGravity").as_float(fallGravityScale);
+	maxFallSpeed = jump.attribute("maxFallSpeed").as_float(maxFallSpeed);
+	coyoteTime = jump.attribute("coyoteTime").as_float(coyoteTime);
+	jumpBufferTime = jump.attribute("bufferTime").as_float(jumpBufferTime);
+
+	pugi::xml_node dash = parameters.child("dash");
+	dashSpeed = dash.attribute("speed").as_float(dashSpeed);
+	dashDuration = dash.attribute("duration").as_float(dashDuration);
+	dashCooldown = dash.attribute("cooldown").as_float(dashCooldown);
+
+	deathDelay = parameters.child("death").attribute("delay").as_float(deathDelay);
+}
+
+void Player::ReadInput()
+{
+	Input* input = Engine::GetInstance().input.get();
+	auto held = [&](int sc) { KeyState k = input->GetKey(sc); return k == KEY_DOWN || k == KEY_REPEAT; };
+
+	inputDir = (held(SDL_SCANCODE_D) ? 1.0f : 0.0f) - (held(SDL_SCANCODE_A) ? 1.0f : 0.0f);
+	if (inputDir != 0.0f) facing = inputDir;
+
+	jumpPressed = input->GetKey(SDL_SCANCODE_SPACE) == KEY_DOWN || input->GetKey(SDL_SCANCODE_W) == KEY_DOWN;
+	jumpHeld = held(SDL_SCANCODE_SPACE) || held(SDL_SCANCODE_W);
+	dashPressed = input->GetKey(SDL_SCANCODE_LSHIFT) == KEY_DOWN || input->GetKey(SDL_SCANCODE_E) == KEY_DOWN;
+
+	if (jumpPressed) jumpBufferTimer = jumpBufferTime;
+}
+
+void Player::UpdateTimers(float dt)
+{
 	if (isGround) {
 		coyoteTimer = coyoteTime;
 		if (!dashing) canDash = true;
@@ -135,87 +165,109 @@ bool Player::Update(float dt)
 
 	if (jumpBufferTimer > 0.0f) jumpBufferTimer -= dt;
 	if (dashCooldownTimer > 0.0f) dashCooldownTimer -= dt;
+}
 
-	// ---- Input ----
-	bool left = input->GetKey(SDL_SCANCODE_A) == KEY_REPEAT || input->GetKey(SDL_SCANCODE_A) == KEY_DOWN;
-	bool right = input->GetKey(SDL_SCANCODE_D) == KEY_REPEAT || input->GetKey(SDL_SCANCODE_D) == KEY_DOWN;
-	float dir = (right ? 1.0f : 0.0f) - (left ? 1.0f : 0.0f);
-	if (dir != 0.0f) facing = dir;
+void Player::Move()
+{
+	// m/s: Box2D integrates it with a fixed time step, so it is framerate independent
+	velocity.x = inputDir * speed;
+}
 
-	bool jumpPressed = input->GetKey(SDL_SCANCODE_SPACE) == KEY_DOWN || input->GetKey(SDL_SCANCODE_W) == KEY_DOWN;
-	bool jumpHeld = jumpPressed || input->GetKey(SDL_SCANCODE_SPACE) == KEY_REPEAT || input->GetKey(SDL_SCANCODE_W) == KEY_REPEAT;
-	bool dashPressed = input->GetKey(SDL_SCANCODE_LSHIFT) == KEY_DOWN || input->GetKey(SDL_SCANCODE_E) == KEY_DOWN;
+void Player::Jump()
+{
+	// Buffered (pressed slightly before landing) + coyote time (slightly after leaving a ledge)
+	if (jumpBufferTimer > 0.0f && coyoteTimer > 0.0f) {
+		velocity.y = -jumpSpeed;
+		jumpBufferTimer = 0.0f;
+		coyoteTimer = 0.0f;
+		isGround = false;
+	}
+}
 
-	if (jumpPressed) jumpBufferTimer = jumpBufferTime;
-
-	velocity = physics->GetLinearVelocity(pbody);
-
-	// ---- Dash ----
+void Player::Dash(float dt)
+{
 	if (dashPressed && !dashing && canDash && dashCooldownTimer <= 0.0f) {
 		dashing = true;
 		canDash = false;
 		dashTimer = dashDuration;
 	}
+	if (!dashing) return;
 
-	if (dashing) {
-		dashTimer -= dt;
-		velocity.x = facing * dashSpeed;
-		velocity.y = 0.0f; // straight line, ignore gravity while dashing
-		if (dashTimer <= 0.0f) {
-			dashing = false;
-			dashCooldownTimer = dashCooldown;
-		}
+	dashTimer -= dt;
+	velocity.x = facing * dashSpeed;
+	velocity.y = 0.0f; // straight line, ignore gravity while dashing
+	if (dashTimer <= 0.0f) {
+		dashing = false;
+		dashCooldownTimer = dashCooldown;
 	}
-	else {
-		velocity.x = dir * speed;
+}
 
-		// ---- Jump (buffered + coyote time) ----
-		if (jumpBufferTimer > 0.0f && coyoteTimer > 0.0f) {
-			velocity.y = -jumpSpeed;
-			jumpBufferTimer = 0.0f;
-			coyoteTimer = 0.0f;
-			isGround = false;
-		}
-	}
-
-	// ---- Gravity feel: floaty-free jump, variable height, capped fall ----
+void Player::ApplyGravity()
+{
+	// Floaty-free jump, variable height (release early = short hop), capped fall
 	float gravityScale;
 	if (dashing) gravityScale = 0.0f;
 	else if (velocity.y < 0.0f) gravityScale = jumpHeld ? riseGravityScale : cutGravityScale;
 	else gravityScale = fallGravityScale;
+
 	b2Body_SetGravityScale(pbody->body, gravityScale);
 	if (velocity.y > maxFallSpeed) velocity.y = maxFallSpeed;
+}
 
-	// Animation state: air -> jump, ground/dash + moving -> move, otherwise idle
+void Player::UpdateAnimation()
+{
 	if (dashing) anims.SetCurrent("move");
 	else if (!isGround) anims.SetCurrent("jump");
-	else if (dir != 0.0f) anims.SetCurrent("move");
+	else if (inputDir != 0.0f) anims.SetCurrent("move");
 	else anims.SetCurrent("idle");
+}
 
-	// Apply velocity via helper
-	physics->SetLinearVelocity(pbody, velocity);
+void Player::ToggleGodMode()
+{
+	godMode = !godMode;
+	dashing = false;
+	Engine::GetInstance().physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
+	if (godMode && dead) Respawn();
+	LOG("God mode %s", godMode ? "ON" : "OFF");
+}
 
+void Player::GodModeFly()
+{
+	Input* input = Engine::GetInstance().input.get();
+	auto held = [&](int sc) { KeyState k = input->GetKey(sc); return k == KEY_DOWN || k == KEY_REPEAT; };
+
+	float flySpeed = speed * 2.0f;
+	float vx = ((held(SDL_SCANCODE_D) ? 1.0f : 0.0f) - (held(SDL_SCANCODE_A) ? 1.0f : 0.0f)) * flySpeed;
+	float vy = ((held(SDL_SCANCODE_S) ? 1.0f : 0.0f) - (held(SDL_SCANCODE_W) ? 1.0f : 0.0f)) * flySpeed;
+	if (vx != 0.0f) facing = (vx > 0.0f) ? 1.0f : -1.0f;
+
+	b2Body_SetGravityScale(pbody->body, 0.0f);
+	Engine::GetInstance().physics->SetLinearVelocity(pbody, vx, vy);
+	anims.SetCurrent((vx != 0.0f || vy != 0.0f) ? "move" : "idle");
+}
+
+void Player::UpdateDead(float dt)
+{
+	// Frozen for deathDelay seconds (the die animation plays), then respawn
+	Engine::GetInstance().physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
+	b2Body_SetGravityScale(pbody->body, 0.0f);
+
+	deathTimer -= dt;
+	if (deathTimer <= 0.0f) Respawn();
+}
+
+void Player::SyncPositionFromBody()
+{
 	int x, y;
 	pbody->GetPosition(x, y);
 	position.setX((float)x);
 	position.setY((float)y);
+}
 
-	// L10: TODO 8: Camera follow
-	// ..
-
-	// Fell below the map (pit): die
+void Player::CheckFallOutOfMap()
+{
+	// Backup only: pits are real PIT colliders built from the map
 	if (position.getY() > Engine::GetInstance().map->GetMapSizeInPixels().getY() + 100.0f) Die();
-
-	UpdateCamera();
-
-
-
-	// L10: TODO 6: Advance the animation frame
-	// ..
-	anims.Update(dt);
-
-
-	return true;
 }
 
 std::vector<std::string> Player::GetDebugLines() const
@@ -245,6 +297,7 @@ void Player::Die()
 	if (dead || godMode) return;   // god mode: nothing can kill the player
 	dead = true;
 	deathTimer = deathDelay;
+	anims.SetCurrent("die");
 	dashing = false;
 	LOG("Player died");
 }
@@ -252,7 +305,11 @@ void Player::Die()
 void Player::Respawn()
 {
 	Map* map = Engine::GetInstance().map.get();
-	Vector2D p = map->hasSpawn ? map->spawnPoint : Vector2D(300.0f, 1400.0f);
+	if (!map->hasSpawn) {
+		LOG("ERROR: the map has no 'Spawn' object layer, cannot respawn");
+		return;
+	}
+	Vector2D p = map->spawnPoint;
 
 	pbody->SetPosition((int)p.getX(), (int)p.getY());
 	Engine::GetInstance().physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
@@ -265,19 +322,18 @@ void Player::Respawn()
 	coyoteTimer = 0.0f;
 	jumpBufferTimer = 0.0f;
 	dashCooldownTimer = 0.0f;
+	anims.SetCurrent("idle");
 }
 
 void Player::UpdateCamera()
 {
 	Vector2D mapSize = Engine::GetInstance().map->GetMapSizeInPixels();
 	float camW = Engine::GetInstance().render->camera.w;
-	float limitLeft = camW / 4;
-	float limitRight = mapSize.getX() - camW * 3.0f / 4.0f;
-
-	if (position.getX() > limitLeft && position.getX() < limitRight)
-	{
-		Engine::GetInstance().render->camera.x = camW / 4.0f - position.getX();
-	}
+	
+	float camX = camW / 4.0f - position.getX();
+	if (camX > 0.0f) camX = 0.0f;
+	if (camX < camW - mapSize.getX()) camX = camW - mapSize.getX();
+	Engine::GetInstance().render->camera.x = camX;
 
 	// Vertical follow, clamped so the camera never leaves the map
 	float camH = Engine::GetInstance().render->camera.h;
@@ -382,6 +438,7 @@ void Player::OnCollision(PhysBody* physA, PhysBody* physB)
 
 		break;
 	case ColliderType::DAMAGE:
+	case ColliderType::PIT:
 		Die();
 		break;
 	case ColliderType::UNKNOWN:

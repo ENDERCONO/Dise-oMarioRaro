@@ -36,7 +36,11 @@ bool Render::Awake()
 	pugi::xml_attribute vsyncAttr = configParameters.child("vsync").attribute("value");
 	if (vsyncAttr.empty()) {
 		LOG("config.xml: missing render/vsync@value, using default false");
+		vsync = false;
+	}
+	else {
 		vsync = vsyncAttr.as_bool();
+	
 	}
 
 	// SDL3: no flags; create default renderer and set vsync separately

@@ -42,7 +42,7 @@ public:
 
 public:
 
-	// Declare player parameters
+	// Declare player parameters (fallback values)
 	float speed = 5.0f;
 	SDL_Texture* texture;
 	int texW, texH;
@@ -71,9 +71,29 @@ public:
 	float dashCooldown = 0.5f;
 
 private:
-	bool CheckGround() const;
+	// ---- One function per action ----
+	void LoadParameters();
+	void ReadInput();
+	void UpdateTimers(float dt);
+	void Move();
+	void Jump();
+	void Dash(float dt);
+	void ApplyGravity();
+	void UpdateAnimation();
+	void ToggleGodMode();
+	void GodModeFly();
+	void UpdateDead(float dt);
+	void SyncPositionFromBody();
+	void CheckFallOutOfMap();
 
+	bool CheckGround() const;
 	void UpdateCamera();
+
+	// Input of the current frame (written by ReadInput)
+	float inputDir = 0.0f;
+	bool jumpPressed = false;
+	bool jumpHeld = false;
+	bool dashPressed = false;
 
 	bool dead = false;
 	float deathTimer = 0.0f;

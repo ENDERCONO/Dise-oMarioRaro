@@ -36,6 +36,10 @@ private:
 	// L04: TODO 3a: Declare a player as a member of Scene.h
 	std::shared_ptr<Player> player;
 
+	bool LoadLevel(int id);
+	void UnloadLevel();
+	int currentLevel = 0;
+
 	void DrawDebugOverlay();
 	bool showHelp = false;   // H toggles the key list
 };

@@ -102,7 +102,7 @@ bool Engine::Awake() {
 
     pugi::xml_attribute rateAttr = engineNode.child("targetFrameRate").attribute("value");
     if (rateAttr.empty()) {
-        LOG("config.xml: missing or invalid engine/targetFrameRate@value, using default %d ms/frame", targetFrameRate);
+        LOG("config.xml: missing or invalid engine/targetFrameRate@value, using default %.0f fps", targetFrameRate);
     }
     else {
         targetFrameRate = rateAttr.as_float();

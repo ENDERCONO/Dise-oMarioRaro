@@ -26,7 +26,7 @@ namespace {
 Physics::Physics() : Module()
 {
 	world = b2_nullWorldId;
-	debug = false; // toggle with F1
+	debug = false; // toggle with F9
 }
 
 // Destructor

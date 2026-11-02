@@ -7,6 +7,7 @@
 #include <vector>
 
 struct SDL_Texture;
+class PhysBody;
 
 // L09: TODO 5: Define properties struct
 struct Properties
@@ -114,6 +115,9 @@ public:
 	// Load new map
 	bool Load(std::string path, std::string mapFileName);
 
+	//Unload map
+	bool UnLoad();
+
 	// L07: TODO 8: Translate tile coordinates (i, j) into world (pixel) coordinates
 	Vector2D MapToWorld(int i, int j) const;
 
@@ -145,6 +149,10 @@ private:
 
 	// L09: TODO 8: Create colliders from map metadata
 
-	int damageGid = 0;
-	int colliderGid = 49; // The gid of the tile that represents a collider in the tileset
+	int colliderGid = 0;//platform
+	int damageGid = 0;//damage / traps
+	int pitGid = 0; // pit / void
+
+	// Every collider built from the map, so UnLoad() can destroy them
+	std::vector<PhysBody*> colliders;
 };

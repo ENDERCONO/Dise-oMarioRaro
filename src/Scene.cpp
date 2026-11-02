@@ -56,22 +56,47 @@ bool Scene::Awake()
 	player->SetParameters(Engine::GetInstance().entityManager->configParameters.child("player"));
 
 	// L08: TODO 4: Create an item through the entity manager
-	std::shared_ptr<Item> item = std::dynamic_pointer_cast<Item>(Engine::GetInstance().entityManager->CreateEntity(EntityType::ITEM));
-	item->position = Vector2D(150, 200);
+	
 	return ret;
 }
 
 // Called before the first frame
 bool Scene::Start()
 {
-	//Engine::GetInstance().audio->PlayMusic("Assets/Audio/Music/level-iv-339695.wav");
+	return LoadLevel(1);
+}
 
-	// L06: TODO 7: Load the map through the map module
-	Engine::GetInstance().map->Load("Assets/Maps/", "Mapa.tmx");
+// Loads level <id> as described in config.xml: map path/file and music.
+// Returns false (and stops the game) if the level or its map is missing.
+bool Scene::LoadLevel(int id)
+{
+	Engine& engine = Engine::GetInstance();
 
-	if (player) player->Respawn();
+	for (pugi::xml_node level = configParameters.child("level"); level; level = level.next_sibling("level"))
+	{
+		if (level.attribute("id").as_int() != id) continue;
 
-	return true;
+		// L06: TODO 7: Load the map through the map module
+		if (!engine.map->Load(level.attribute("path").as_string(), level.attribute("file").as_string()))
+			return false;
+
+		const char* music = level.attribute("music").as_string();
+		if (music[0] != '\0') engine.audio->PlayMusic(music);
+
+		currentLevel = id;
+		if (player) player->Respawn();
+		LOG("Level %d loaded", id);
+		return true;
+	}
+
+	LOG("ERROR: level %d not found in config.xml <scene>", id);
+	return false;
+}
+
+void Scene::UnloadLevel()
+{
+	Engine::GetInstance().map->UnLoad();
+	currentLevel = 0;
 }
 
 // Called each loop iteration

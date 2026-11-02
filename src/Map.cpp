@@ -73,6 +73,17 @@ bool Map::PostUpdate()
 bool Map::CleanUp()
 {
 	LOG("Unloading map");
+	return UnLoad();
+}
+
+// Destroys everything Load() created, so another map can be loaded after it
+bool Map::UnLoad()
+{
+	// Colliders: built once in Load(), destroyed once here.
+	// DeletePhysBody() is safe even if the physics world is already gone.
+	for (PhysBody* body : colliders)
+		Engine::GetInstance().physics->DeletePhysBody(body);
+	colliders.clear();
 
 	// L06: TODO 2: Unload every tileset's texture
 	for (const auto& tileset : mapData.tilesets) {
@@ -83,12 +94,19 @@ bool Map::CleanUp()
 	// L07: TODO 2: Clear the layers
 	mapData.layers.clear();
 
+	colliderGid = damageGid = pitGid = 0;
+	hasSpawn = false;
+	mapLoaded = false;
+
 	return true;
 }
 
 // Load new map
 bool Map::Load(std::string path, std::string fileName)
 {
+	// Loading a new level: clean up the previous one first
+	if (mapLoaded) UnLoad();
+
 	bool ret = false;
 
 	// Assigns the name of the map file and the path
@@ -139,8 +157,9 @@ bool Map::Load(std::string path, std::string fileName)
 
 			// The collider tile is the first tile of the "MapMetadata" tileset, wherever its firstgid ends up
 			if (tileSet.name == "MapMetadata") {
-				colliderGid = tileSet.firstGid;       // tile 0 (red)   = solid platform
-				damageGid = tileSet.firstGid + 1;     // tile 1 (green) = damage / death
+				colliderGid = tileSet.firstGid; //solid platform
+				damageGid = tileSet.firstGid + 1; //damage / death
+				pitGid = tileSet.firstGid + 2; //pit
 			}
 
 			mapData.tilesets.push_back(tileSet);
@@ -180,28 +199,34 @@ bool Map::Load(std::string path, std::string fileName)
 					for (int j = 0; j < mapData.height; j++) {
 
 						int gid = layer.Get(i, j);
-						if (gid != 0 && gid == colliderGid) {
-							Vector2D mapCoord = MapToWorld(i, j);
-							PhysBody* body = Engine::GetInstance().physics->CreateRectangle((int)mapCoord.getX() + mapData.tileWidth / 2,
-								(int)mapCoord.getY() + mapData.tileHeight / 2,
-								mapData.tileWidth,
-								mapData.tileHeight,
-								bodyType::STATIC);
+						if (gid == 0) continue;
+
+						Vector2D tilePos = MapToWorld(i, j);
+						int cx = (int)tilePos.getX() + mapData.tileWidth / 2;
+						int cy = (int)tilePos.getY() + mapData.tileHeight / 2;
+						Physics* physics = Engine::GetInstance().physics.get();
+						PhysBody* body = nullptr;
+
+						if (gid == colliderGid) {
+							// Solid platform
+							body = physics->CreateRectangle(cx, cy, mapData.tileWidth, mapData.tileHeight, bodyType::STATIC);
 							body->ctype = ColliderType::PLATFORM;
-							Engine::GetInstance().physics->SetDebugColor(body, 0x33FF66); // green
+							physics->SetDebugColor(body, 0x33FF66); // green
 						}
-						else if (gid != 0 && gid == damageGid) {
+						else if (gid == damageGid) {
 							// Sensor: the player overlaps it (no solid collision) and OnCollision fires
-							Vector2D mapCoord = MapToWorld(i, j);
-							PhysBody* body = Engine::GetInstance().physics->CreateRectangleSensor(
-								(int)mapCoord.getX() + mapData.tileWidth / 2,
-								(int)mapCoord.getY() + mapData.tileHeight / 2,
-								mapData.tileWidth,
-								mapData.tileHeight,
-								bodyType::STATIC);
+							body = physics->CreateRectangleSensor(cx, cy, mapData.tileWidth, mapData.tileHeight, bodyType::STATIC);
 							body->ctype = ColliderType::DAMAGE;
-							Engine::GetInstance().physics->SetDebugColor(body, 0xFF3333); // red
+							physics->SetDebugColor(body, 0xFF3333); // red
 						}
+						else if (gid == pitGid) {
+							// Sensor at the bottom of a pit: falling in kills the player
+							body = physics->CreateRectangleSensor(cx, cy, mapData.tileWidth, mapData.tileHeight, bodyType::STATIC);
+							body->ctype = ColliderType::PIT;
+							physics->SetDebugColor(body, 0x3399FF); // blue
+						}
+
+						if (body != nullptr) colliders.push_back(body);
 					}
 				}
 			}
