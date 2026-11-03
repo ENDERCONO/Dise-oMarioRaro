@@ -20,9 +20,11 @@
 	<!-- Player tuning. Speeds are Box2D units (m/s); times are seconds. -->
 	<entitymanager>
 		<player>
-			<texture path="Assets/Textures/player2_spritesheet.png"/>
-			<animations tsx="Assets/Textures/Spritesheet.tsx"/>
-			<frame width="32" height="32"/>
+			<texture path="Assets/Textures/player_blue_spritesheet.png"/>
+			<animations tsx="Assets/Textures/PlayerBlue.tsx"/>
+			<frame width="48" height="48"/>
+			<hitbox width="20" height="34"/>
+			<sprite facing="right"/>
 			<movement speed="4.0"/>
 			<jump force="10.0" riseGravity="2.2" cutGravity="5.0" fallGravity="3.0"
 				  maxFallSpeed="18.0" coyoteTime="0.10" bufferTime="0.12"/>

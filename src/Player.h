@@ -46,6 +46,8 @@ public:
 	float speed = 5.0f;
 	SDL_Texture* texture;
 	int texW, texH;
+	int hitW = 20, hitH = 34;
+	bool spriteFacesRight = true;
 
 	// L08: TODO 5: Add physics to the player - declare a Physics body
 	PhysBody* pbody = nullptr;

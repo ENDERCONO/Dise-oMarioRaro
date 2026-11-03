@@ -107,7 +107,10 @@ bool AnimationSet::LoadFromTSX(const char* tsxPath, const std::unordered_map<int
 		std::string name = (alias != aliases.end()) ? alias->second : ("tile_" + std::to_string(baseId));
 
 		Animation clip;
-		clip.SetLoop(true);
+		bool loops = true;
+		for (pugi::xml_node prop : tileNode.child("properties").children("property"))
+			if (std::string(prop.attribute("name").as_string()) == "loop") loops = prop.attribute("value").as_bool(true);
+		clip.SetLoop(loops);
 
 		for (pugi::xml_node frameNode : animNode.children("frame"))
 		{

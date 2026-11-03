@@ -45,8 +45,14 @@ bool Player::Start()
 	// ...
 
 	
+	//Physics hitbox and sprite direction from config.xml
+	hitW = parameters.child("hitbox").attribute("width").as_int(texW / 2);
+	hitH = parameters.child("hitbox").attribute("height").as_int(texH);
+	spriteFacesRight = std::string(parameters.child("sprite").attribute("facing").as_string("right")) != "left";
+
+	//Tile ids of the first frame of each clip in PlayerBlue.tsx (8 columns: one clip per row)
 	anims.LoadFromTSX(parameters.child("animations").attribute("tsx").as_string(),
-		{ {0, "idle"}, {11, "move"}, {22, "jump"}, {25, "die"} });
+		{ {0, "idle"}, {8, "move"}, {16, "jump"}, {24, "die"} });
 	anims.SetCurrent("idle");
 
 	//Movement / jump / dash / death tuning from config.xml
@@ -57,7 +63,7 @@ bool Player::Start()
 
 	// L08: TODO 5: Add physics to the player - create the physics body: a CAPSULE (CreateCapsule) with fixed rotation, so the player does not roll
 	// Capsule + fixed rotation: no rolling, and no bumping over the seams between tile rectangles
-	pbody = Engine::GetInstance().physics->CreateCapsule((int)position.getX() + texW / 2, (int)position.getY() + texH / 2, texW / 2, texH, bodyType::DYNAMIC);
+	pbody = Engine::GetInstance().physics->CreateCapsule((int)position.getX() + hitW / 2, (int)position.getY() + hitH / 2, hitW, hitH, bodyType::DYNAMIC);
 
 	// No friction on the player: velocity.x is set directly every frame, so friction
 	// is never needed on the ground, and it is what made the player stick to walls.
@@ -217,7 +223,7 @@ void Player::ApplyGravity()
 void Player::UpdateAnimation()
 {
 	if (dashing) anims.SetCurrent("move");
-	else if (!isGround) anims.SetCurrent("jump");
+	else if (!isGround && coyoteTimer <= 0.0f) anims.SetCurrent("jump"); // ignore 1-frame ground losses on tile seams
 	else if (inputDir != 0.0f) anims.SetCurrent("move");
 	else anims.SetCurrent("idle");
 }
@@ -346,7 +352,7 @@ void Player::UpdateCamera()
 bool Player::Draw()
 {
 	
-	float feetY = position.getY() + texH / 2.0f;
+	float feetY = position.getY() + hitH / 2.0f;   // bottom of the capsule
 	float groundY = 0.0f;
 	if (Engine::GetInstance().map->FindGroundBelow(position.getX(), feetY, shadowMaxDistance, groundY))
 	{
@@ -367,7 +373,8 @@ bool Player::Draw()
 	SDL_Rect currentFrame = anims.GetCurrentFrame();
 	
 
-	SDL_FlipMode flip = (facing < 0.0f) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+	bool lookingLeft = (facing < 0.0f);
+	SDL_FlipMode flip = (lookingLeft == spriteFacesRight) ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
 	Engine::GetInstance().render->DrawTexture(texture, (int)position.getX() - texW / 2, (int)position.getY() - texH / 2, &currentFrame, 1.0f, 0.0, INT_MAX, INT_MAX, flip);
 
 	return true;
