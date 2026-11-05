@@ -33,13 +33,15 @@
 			<audiofx path="Assets/Audio/Fx/coin-collision-sound-342335.wav"/>
 			<jumpfx path="Assets/Audio/Fx/jump.wav"/>
 			<spawnfx path="Assets/Audio/Fx/spawn.wav"/>
+			<dashfx path="Assets/Audio/Fx/dash.wav"/>
 		</player>
 	</entitymanager>
 
 	<!-- One <level> per map; Assignment 2 adds id="2". -->
 	<scene>
 		<level id="1" path="Assets/Maps/" file="Mapa.tmx"
-			   music="Assets/Audio/Music/level-iv-339695.wav"/>
+			   music="Assets/Audio/Music/gameplay.wav"/>
+		<helpfx path="Assets/Audio/Fx/help.wav"/>
 	</scene>
 
 </config>

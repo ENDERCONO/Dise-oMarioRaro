@@ -193,7 +193,7 @@ bool Audio::PlayMusic(const char* path, float fadeTime) {
         return false;
     }
 
-    // Queue once (simple play). For looping, requeue when drained (TODO).
+    // Queue the first copy. Audio::Update() requeues it when it is about to end (loop).
     if (!SDL_PutAudioStreamData(music_stream_, music_data_.buf, music_data_.len)) {
         LOG("Audio: SDL_PutAudioStreamData(music) failed: %s", SDL_GetError());
         return false;
@@ -318,5 +318,14 @@ bool Audio::Update(float dt) {
             SDL_SetAudioStreamGain(tracked_stream_, sfx_volume_ * (tracked_fade_left_ / tracked_fade_total_));
         }
     }
+
+    if (music_stream_ && music_data_.buf && music_data_.len > 0) {
+        int bytesPerSec = music_data_.spec.freq * music_data_.spec.channels
+            * (SDL_AUDIO_BITSIZE(music_data_.spec.format) / 8);
+        if (SDL_GetAudioStreamQueued(music_stream_) < bytesPerSec) {
+            SDL_PutAudioStreamData(music_stream_, music_data_.buf, music_data_.len);
+        }
+    }
+
     return true;
 }

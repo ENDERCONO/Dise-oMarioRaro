@@ -69,6 +69,9 @@ bool Player::Start()
 	// Respawn sound
 	spawnFxId = Engine::GetInstance().audio->LoadFx(parameters.child("spawnfx").attribute("path").as_string());
 
+	// Dash sound
+	dashFxId = Engine::GetInstance().audio->LoadFx(parameters.child("dashfx").attribute("path").as_string());
+
 	// L08: TODO 5: Add physics to the player - create the physics body: a CAPSULE (CreateCapsule) with fixed rotation, so the player does not roll
 	// Capsule + fixed rotation: no rolling, and no bumping over the seams between tile rectangles
 	pbody = Engine::GetInstance().physics->CreateCapsule((int)position.getX() + hitW / 2, (int)position.getY() + hitH / 2, hitW, hitH, bodyType::DYNAMIC);
@@ -259,6 +262,7 @@ void Player::Dash(float dt)
 		dashing = true;
 		canDash = false;
 		dashTimer = dashDuration;
+		Engine::GetInstance().audio->PlayFx(dashFxId);
 	}
 	if (!dashing) return;
 

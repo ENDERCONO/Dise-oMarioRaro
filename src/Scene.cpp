@@ -63,6 +63,9 @@ bool Scene::Awake()
 // Called before the first frame
 bool Scene::Start()
 {
+	// Help sound (<helpfx> inside <scene> in config.xml)
+	helpFxId = Engine::GetInstance().audio->LoadFx(configParameters.child("helpfx").attribute("path").as_string());
+	
 	return LoadLevel(1);
 }
 
@@ -137,7 +140,10 @@ void Scene::DrawDebugOverlay()
 {
 	Engine& engine = Engine::GetInstance();
 
-	if (engine.input->GetKey(SDL_SCANCODE_H) == KEY_DOWN) showHelp = !showHelp;
+	if (engine.input->GetKey(SDL_SCANCODE_H) == KEY_DOWN) {
+		showHelp = !showHelp;
+		if (showHelp) engine.audio->PlayFx(helpFxId);   // Only when the box appears
+	}
 
 	std::vector<std::string> status;
 	if (player && player->godMode) status.push_back("GOD MODE (F10)");

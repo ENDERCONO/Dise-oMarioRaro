@@ -117,6 +117,7 @@ private:
 	int pickCoinFxId;
 	int jumpFxId = 0;
 	int spawnFxId = 0;
+	int dashFxId = 0;
 
 	// Jump sound tracking
 	bool  jumpSoundActive = false;

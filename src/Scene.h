@@ -42,4 +42,5 @@ private:
 
 	void DrawDebugOverlay();
 	bool showHelp = false;   // H toggles the key list
+	int helpFxId = 0;        // Sound when the help box opens
 };
