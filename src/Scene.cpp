@@ -157,14 +157,14 @@ void Scene::DrawDebugOverlay()
 
 	if (showHelp) {
 		DrawTextBlock(800, 12, {
-			"H        This help",
+			"H        Help",
 			"F9       Colliders + info",
-			"F10      God mode (fly)",
+			"F10      God mode",
 			"F11      30 FPS cap",
 			"A / D    Move",
 			"W / Space Jump",
-			"S        Fly down (god)",
-			"Shift/J  Dash",
+			"S        Fly down (god mode only)",
+			"Shift/E  Dash",
 			"Esc      Quit" }, 255, 255, 255);
 	}
 	else {
