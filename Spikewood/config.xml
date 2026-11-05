@@ -1,0 +1,47 @@
+<!-- Config file for the engine -->
+<config>
+	<engine>
+		<title value="Platformer Game"/>
+		<targetFrameRate value="60"/>
+	</engine>
+
+	<render>
+		<vsync value="false"/>
+	</render>
+
+	<window>
+		<resolution width="1280" height="720" scale="1"/>
+		<fullscreen value="false"/>
+		<borderless value="false"/>
+		<resizable value="false"/>
+		<fullscreen_window value="false"/>
+	</window>
+
+	<!-- Player tuning. Speeds are Box2D units (m/s); times are seconds. -->
+	<entitymanager>
+		<player>
+			<texture path="Assets/Textures/player_blue_spritesheet.png"/>
+			<animations tsx="Assets/Textures/PlayerBlue.tsx"/>
+			<frame width="48" height="48"/>
+			<hitbox width="20" height="34"/>
+			<sprite facing="right"/>
+			<movement speed="4.0"/>
+			<jump force="10.0" riseGravity="2.2" cutGravity="5.0" fallGravity="3.0"
+				  maxFallSpeed="18.0" coyoteTime="0.10" bufferTime="0.12"/>
+			<dash speed="14.0" duration="0.16" cooldown="0.5"/>
+			<death delay="0.5"/>
+			<audiofx path="Assets/Audio/Fx/coin-collision-sound-342335.wav"/>
+			<jumpfx path="Assets/Audio/Fx/jump.wav"/>
+			<spawnfx path="Assets/Audio/Fx/spawn.wav"/>
+			<dashfx path="Assets/Audio/Fx/dash.wav"/>
+		</player>
+	</entitymanager>
+
+	<!-- One <level> per map; Assignment 2 adds id="2". -->
+	<scene>
+		<level id="1" path="Assets/Maps/" file="Mapa.tmx"
+			   music="Assets/Audio/Music/gameplay.wav"/>
+		<helpfx path="Assets/Audio/Fx/help.wav"/>
+	</scene>
+
+</config>
