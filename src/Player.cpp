@@ -10,6 +10,7 @@
 #include "Map.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 Player::Player() : Entity(EntityType::PLAYER)
@@ -61,6 +62,13 @@ bool Player::Start()
 	// Audio effect path from config.xml
 	pickCoinFxId = Engine::GetInstance().audio->LoadFx(parameters.child("audiofx").attribute("path").as_string());
 
+	// Jump sound
+	jumpFxId = Engine::GetInstance().audio->LoadFx(parameters.child("jumpfx").attribute("path").as_string());
+	jumpSoundLen = Engine::GetInstance().audio->GetFxDuration(jumpFxId);
+
+	// Respawn sound
+	spawnFxId = Engine::GetInstance().audio->LoadFx(parameters.child("spawnfx").attribute("path").as_string());
+
 	// L08: TODO 5: Add physics to the player - create the physics body: a CAPSULE (CreateCapsule) with fixed rotation, so the player does not roll
 	// Capsule + fixed rotation: no rolling, and no bumping over the seams between tile rectangles
 	pbody = Engine::GetInstance().physics->CreateCapsule((int)position.getX() + hitW / 2, (int)position.getY() + hitH / 2, hitW, hitH, bodyType::DYNAMIC);
@@ -102,6 +110,7 @@ bool Player::Update(float dt)
 		isGround = CheckGround();
 		UpdateTimers(dt);
 		ReadInput();
+		UpdateJumpSound(dt);
 
 		velocity = physics->GetLinearVelocity(pbody);
 		Dash(dt);
@@ -187,7 +196,61 @@ void Player::Jump()
 		jumpBufferTimer = 0.0f;
 		coyoteTimer = 0.0f;
 		isGround = false;
+
+		// Jump sound starts on takeoff, UpdateJumpSound() keeps it in sync
+		if (Engine::GetInstance().audio->PlayFxTracked(jumpFxId)) {
+			jumpSoundActive = true;
+			jumpAirTime = 0.0f;
+			jumpSoundPos = 0.0f;
+			jumpStartY = position.getY();
+		}
 	}
+}
+
+void Player::StopJumpSound()
+{
+	if (!jumpSoundActive) return;
+	Engine::GetInstance().audio->StopFxTracked(0.05f);   // 50 ms fade-out, no click
+	jumpSoundActive = false;
+}
+
+void Player::UpdateJumpSound(float dt)
+{
+	if (!jumpSoundActive) return;
+	Audio* audio = Engine::GetInstance().audio.get();
+
+	jumpAirTime += dt;
+
+	// 1) Landing -> stop the sound. The 0.08 s guard is because the ground
+	//    contact can still be alive for a frame or two right after takeoff.
+	if (isGround && jumpAirTime > 0.08f) {
+		StopJumpSound();
+		return;
+	}
+
+	// 2) Estimate how long the jump still has to last (same formulas as ApplyGravity)
+	float g = -GRAVITY_Y;                                                   // 8 m/s^2
+	float vy = Engine::GetInstance().physics->GetLinearVelocity(pbody).y;    // < 0 = going up
+	float h = (jumpStartY - position.getY()) / PIXELS_PER_METER;            // m above takeoff
+
+	float tUp = 0.0f, apex = h;
+	if (vy < 0.0f) {
+		float rise = jumpHeld ? riseGravityScale : cutGravityScale;   // key held -> long, released -> short
+		tUp = -vy / (g * rise);
+		apex = h + (vy * vy) / (2.0f * g * rise);
+	}
+	if (apex < 0.1f) apex = 0.1f;                                    // avoid dividing by ~0
+	float tDown = std::sqrt(2.0f * apex / (g * fallGravityScale));
+	float airLeft = tUp + tDown;
+
+	// 3) Speed so the remaining sound ends right when we land
+	float soundLeft = jumpSoundLen - jumpSoundPos;
+	float ratio = 1.0f;
+	if (soundLeft > 0.0f && airLeft > 0.0f)
+		ratio = std::clamp(soundLeft / airLeft, 0.8f, 1.25f);         // clamp: avoid weird pitch
+
+	audio->SetFxTrackedSpeed(ratio);
+	jumpSoundPos += dt * ratio;                                      // sound time advances at 'ratio'
 }
 
 void Player::Dash(float dt)
@@ -231,6 +294,7 @@ void Player::UpdateAnimation()
 void Player::ToggleGodMode()
 {
 	godMode = !godMode;
+	StopJumpSound();
 	dashing = false;
 	Engine::GetInstance().physics->SetLinearVelocity(pbody, 0.0f, 0.0f);
 	if (godMode && dead) Respawn();
@@ -259,7 +323,12 @@ void Player::UpdateDead(float dt)
 	b2Body_SetGravityScale(pbody->body, 0.0f);
 
 	deathTimer -= dt;
-	if (deathTimer <= 0.0f) Respawn();
+	if (deathTimer <= 0.0f) {
+		Respawn();
+		// Only if the respawn really happened (it can fail if the map has no Spawn layer;
+		// without this check the sound would repeat every frame)
+		if (!dead) Engine::GetInstance().audio->PlayFx(spawnFxId);
+	}
 }
 
 void Player::SyncPositionFromBody()
@@ -302,6 +371,7 @@ void Player::Die()
 {
 	if (dead || godMode) return;   // god mode: nothing can kill the player
 	dead = true;
+	StopJumpSound();
 	deathTimer = deathDelay;
 	anims.SetCurrent("die");
 	dashing = false;

@@ -33,6 +33,13 @@ public:
 	// Play a previously loaded WAV
 	bool PlayFx(int fx, int repeat = 0);
 
+    bool  PlayFxTracked(int fx);
+    void  StopFxTracked(float fadeTime = 0.05f);   // seconds
+    void  SetFxTrackedSpeed(float ratio);          // 1.0 = normal
+    float GetFxDuration(int fx) const;             // seconds
+
+    bool Update(float dt);
+
 	// Volume control
 	void SetMusicVolume(float volume); // 0.0f - 1.0f
 	void SetSFXVolume(float volume);   // 0.0f - 1.0f
@@ -52,6 +59,9 @@ private:
     // Streams
     SDL_AudioStream* music_stream_{ nullptr }; // for background music (single)
     SDL_AudioStream* sfx_stream_{ nullptr };   // simple shared SFX stream
+    SDL_AudioStream* tracked_stream_{ nullptr }; // controllable SFX (jump)
+    float tracked_fade_total_ = 0.0f;
+    float tracked_fade_left_ = 0.0f;
 
     // Loaded sounds
     SoundData music_data_{};

@@ -95,6 +95,16 @@ bool Audio::EnsureStreams() {
     // Set SFX volume
     SDL_SetAudioStreamGain(sfx_stream_, sfx_volume_);
 
+    if (!tracked_stream_) {
+        tracked_stream_ = SDL_CreateAudioStream(nullptr, &device_spec_);
+        if (!tracked_stream_ || !SDL_BindAudioStream(device_, tracked_stream_)) {
+            LOG("Audio: tracked stream failed: %s", SDL_GetError());
+            if (tracked_stream_) { SDL_DestroyAudioStream(tracked_stream_); tracked_stream_ = nullptr; }
+            return false;
+        }
+    }
+    SDL_SetAudioStreamGain(tracked_stream_, sfx_volume_);
+
     return true;
 }
 
@@ -119,6 +129,7 @@ bool Audio::CleanUp() {
     if (!active || !SDL_WasInit(SDL_INIT_AUDIO)) {
         music_stream_ = nullptr;
         sfx_stream_ = nullptr;
+        tracked_stream_ = nullptr;
         device_ = 0;
         sfx_.clear();
         FreeSound(music_data_);
@@ -141,6 +152,13 @@ bool Audio::CleanUp() {
         SDL_DestroyAudioStream(sfx_stream_);
         sfx_stream_ = nullptr;
     }
+
+    if (tracked_stream_) {
+        SDL_UnbindAudioStream(tracked_stream_);
+        SDL_DestroyAudioStream(tracked_stream_);
+        tracked_stream_ = nullptr;
+    }
+
     for (auto& s : sfx_) FreeSound(s);
     sfx_.clear();
 
@@ -247,4 +265,58 @@ void Audio::SetSFXVolume(float volume)
     if (sfx_stream_) {
         SDL_SetAudioStreamGain(sfx_stream_, sfx_volume_);
     }
+}
+
+bool Audio::PlayFxTracked(int id) {
+    if (!active) return false;
+    if (id <= 0 || id > static_cast<int>(sfx_.size())) return false;
+    if (!EnsureStreams()) return false;
+
+    const SoundData& s = sfx_[static_cast<size_t>(id - 1)];
+
+    SDL_ClearAudioStream(tracked_stream_);                       // cut whatever was playing
+    SDL_SetAudioStreamFormat(tracked_stream_, &s.spec, &device_spec_);
+    SDL_SetAudioStreamFrequencyRatio(tracked_stream_, 1.0f);     // reset speed
+    SDL_SetAudioStreamGain(tracked_stream_, sfx_volume_);        // reset volume
+    tracked_fade_left_ = 0.0f;
+
+    return SDL_PutAudioStreamData(tracked_stream_, s.buf, s.len);
+}
+
+void Audio::StopFxTracked(float fadeTime) {
+    if (!tracked_stream_) return;
+    if (fadeTime <= 0.0f) {
+        SDL_ClearAudioStream(tracked_stream_);
+        return;
+    }
+    tracked_fade_total_ = fadeTime;
+    tracked_fade_left_ = fadeTime;   // Update() does the fade-out
+}
+
+void Audio::SetFxTrackedSpeed(float ratio) {
+    if (tracked_stream_) SDL_SetAudioStreamFrequencyRatio(tracked_stream_, ratio);
+}
+
+float Audio::GetFxDuration(int id) const {
+    if (id <= 0 || id > static_cast<int>(sfx_.size())) return 0.0f;
+    const SoundData& s = sfx_[static_cast<size_t>(id - 1)];
+    int bytesPerFrame = (SDL_AUDIO_BITSIZE(s.spec.format) / 8) * s.spec.channels;
+    if (bytesPerFrame <= 0 || s.spec.freq <= 0) return 0.0f;
+    return (float)(s.len / bytesPerFrame) / (float)s.spec.freq;
+}
+
+bool Audio::Update(float dt) {
+    // Fade-out: lower the gain a bit every frame, then clear the stream
+    if (tracked_stream_ && tracked_fade_left_ > 0.0f) {
+        tracked_fade_left_ -= dt;
+        if (tracked_fade_left_ <= 0.0f) {
+            SDL_ClearAudioStream(tracked_stream_);
+            SDL_SetAudioStreamGain(tracked_stream_, sfx_volume_);
+            tracked_fade_left_ = 0.0f;
+        }
+        else {
+            SDL_SetAudioStreamGain(tracked_stream_, sfx_volume_ * (tracked_fade_left_ / tracked_fade_total_));
+        }
+    }
+    return true;
 }

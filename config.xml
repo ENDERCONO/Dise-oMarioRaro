@@ -31,6 +31,8 @@
 			<dash speed="14.0" duration="0.16" cooldown="0.5"/>
 			<death delay="0.5"/>
 			<audiofx path="Assets/Audio/Fx/coin-collision-sound-342335.wav"/>
+			<jumpfx path="Assets/Audio/Fx/jump.wav"/>
+			<spawnfx path="Assets/Audio/Fx/spawn.wav"/>
 		</player>
 	</entitymanager>
 

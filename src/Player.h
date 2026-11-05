@@ -79,6 +79,8 @@ private:
 	void UpdateTimers(float dt);
 	void Move();
 	void Jump();
+	void UpdateJumpSound(float dt);
+	void StopJumpSound();
 	void Dash(float dt);
 	void ApplyGravity();
 	void UpdateAnimation();
@@ -113,6 +115,15 @@ private:
 	float facing = 1.0f;             // 1 = right, -1 = left
 	// Audio fx
 	int pickCoinFxId;
+	int jumpFxId = 0;
+	int spawnFxId = 0;
+
+	// Jump sound tracking
+	bool  jumpSoundActive = false;
+	float jumpAirTime = 0.0f;      // seconds since takeoff
+	float jumpSoundPos = 0.0f;     // how much of the sound has played (s)
+	float jumpSoundLen = 0.0f;     // total sound length (s)
+	float jumpStartY = 0.0f;       // y (px) at takeoff
 
 	// L10: TODO 5: Player's animation clips, loaded from a TSX in Start()
 	// ..
